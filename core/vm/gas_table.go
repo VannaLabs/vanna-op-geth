@@ -475,3 +475,10 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	}
 	return gas, nil
 }
+
+// add gas function for inferCall
+func gasInferCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	//return constant gas
+	var gas uint64 = 20
+	return gas, nil
+}

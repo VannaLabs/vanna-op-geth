@@ -204,6 +204,10 @@ const (
 	LOG4
 )
 
+const (
+	INFERCALL OpCode = 0xb0
+)
+
 // 0xb0 range.
 const (
 	TLOAD  OpCode = 0xb3

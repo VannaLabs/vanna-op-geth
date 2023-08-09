@@ -1040,6 +1040,13 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
 		},
+		// make infercall min max stack equal to call for now.
+		INFERCALL: {
+			execute:    opInferCall,
+			dynamicGas: gasInferCall,
+			minStack:   minStack(7, 1),
+			maxStack:   maxStack(7, 1),
+		},
 	}
 
 	// Fill all unassigned slots with opUndefined.
