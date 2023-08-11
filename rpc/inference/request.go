@@ -24,22 +24,22 @@ protoc --go_out=. --go_opt=paths=source_relative \
 */
 
 type InferenceTx struct {
-	hash   string
-	model  string
-	params string
+	Hash   string
+	Model  string
+	Params string
 }
 
 type InferenceConsolidation struct {
-	tx           InferenceTx
-	result       string
-	attestations []string
-	weight       float64
+	Tx           InferenceTx
+	Result       string
+	Attestations []string
+	Weight       float64
 }
 
 func (ic InferenceConsolidation) attest(threshold float64, node string, nodeWeight float64) bool {
-	ic.attestations = append(ic.attestations, node)
-	ic.weight += nodeWeight
-	return ic.weight >= threshold
+	ic.Attestations = append(ic.Attestations, node)
+	ic.Weight += nodeWeight
+	return ic.Weight >= threshold
 }
 
 type RequestClient struct {
@@ -56,7 +56,7 @@ func NewRequestClient(portNum int) *RequestClient {
 }
 
 // Emit inference transaction
-func (rc RequestClient) emit(tx InferenceTx) (float64, error) {
+func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
 	resultMap := make(map[string]InferenceConsolidation)
 	nodes := getNodes()
 	for _, ip := range nodes {
@@ -73,13 +73,13 @@ func (rc RequestClient) emit(tx InferenceTx) (float64, error) {
 		client := NewInferenceClient(conn)
 		result := RunInference(client, tx)
 		if _, ok := resultMap[result]; !ok {
-			resultMap[result] = InferenceConsolidation{tx: tx, result: result, attestations: []string{}, weight: 0}
+			resultMap[result] = InferenceConsolidation{Tx: tx, Result: result, Attestations: []string{}, Weight: 0}
 		}
 		// Increment results count
 		if val, ok := resultMap[result]; ok {
 			complete := val.attest(float64(len(nodes)), ip, 1)
 			if complete {
-				parsedResult, err := strconv.ParseFloat(val.result, 64)
+				parsedResult, err := strconv.ParseFloat(val.Result, 64)
 				if err == nil {
 					return parsedResult, nil
 				} else {
@@ -160,5 +160,5 @@ func getDialOptions() []grpc.DialOption {
 }
 
 func buildInferenceParameters(tx InferenceTx) *InferenceParameters {
-	return &InferenceParameters{Tx: tx.hash, ModelHash: tx.model, ModelInput: tx.params}
+	return &InferenceParameters{Tx: tx.Hash, ModelHash: tx.Model, ModelInput: tx.Params}
 }

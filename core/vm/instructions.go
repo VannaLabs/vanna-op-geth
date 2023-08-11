@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	inference "github.com/ethereum/go-ethereum/rpc/inference"
 	"github.com/holiman/uint256"
 )
 
@@ -812,6 +813,21 @@ func opUndefined(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 
 func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	return nil, errStopToken
+}
+
+func opInferCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	rc := inference.NewRequestClient(5125)
+	tx := inference.InferenceTx{
+		Hash:   "0x123",
+		Model:  "Volatility",
+		Params: "[[0.03],[0.05],[0.04056685],[0.03235871],[0.05629578]]",
+	}
+	result, err := rc.Emit(tx)
+	if (err != nil) {
+		return []byte{}, err
+	}
+	ret := result
+	return []byte{byte(ret)}, nil
 }
 
 func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
