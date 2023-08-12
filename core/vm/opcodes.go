@@ -204,8 +204,12 @@ const (
 	LOG4
 )
 
+// const (
+// 	INFERCALL OpCode = 0xb0
+// )
 const (
-	INFERCALL OpCode = 0xb0
+	VANNA256 OpCode = 0xc0
+	INFERCALL OpCode = 0xc1
 )
 
 // 0xb0 range.
