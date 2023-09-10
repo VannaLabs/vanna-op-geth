@@ -20,7 +20,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -79,15 +81,16 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):    &ecrecover{},
+	common.BytesToAddress([]byte{2}):    &sha256hash{},
+	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):    &dataCopy{},
+	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):    &blake2F{},
+	common.BytesToAddress([]byte{1, 0}): &inferCall{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -1047,4 +1050,36 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+type inferCall struct{}
+
+func (c *inferCall) RequiredGas(input []byte) uint64 {
+	return uint64(1024)
+}
+
+var (
+	errConstInvalidInputLength = errors.New("invalid input length")
+	errNotValidInput           = errors.New("not valid input")
+)
+
+func (c *inferCall) Run(input []byte) ([]byte, error) {
+	// Only allow input up to four bytes (function signature)
+	// if len(input) > 4 {
+	//     return nil, errConstInvalidInputLength
+	// }
+	//add timestamp and print
+	fmt.Println("inferCall in test byte", input)
+
+	inputStr := string(input)
+	// split string into two parts
+	inputArray := strings.Split(inputStr, "-")
+
+	fmt.Println("inferCall in test string", inputStr)
+	//parse input t
+	output := make([]byte, 6)
+	for i := 0; i < 6; i++ {
+		output[i] = byte(64 + i)
+	}
+	return output, nil
 }
