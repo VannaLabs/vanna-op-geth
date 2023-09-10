@@ -1067,15 +1067,11 @@ var (
 )
 
 func (c *inferCall) Run(input []byte) ([]byte, error) {
-	fmt.Println("inferCall in test byte", input)
 	inputStr := string(input)
-	fmt.Println("inferCall in test string", inputStr)
 	// split string into two parts
 	inputArray := strings.Split(inputStr, "-")
 	modelName := inputArray[0]
 	inputData := inputArray[1]
-	fmt.Println("inferCall in test modelName", modelName)
-	fmt.Println("inferCall in test inputData", inputData)
 	rc := inference.NewRequestClient(5125)
 	tx := inference.InferenceTx{
 		Hash:   "0x123",
@@ -1087,12 +1083,10 @@ func (c *inferCall) Run(input []byte) ([]byte, error) {
 		fmt.Println("inferCall in test err", err)
 		return []byte{}, err
 	}
-	fmt.Println("inferCall in test result", result)
 	//to fixed 10 -> byte size 12
 	// need to have a byte size format method to make output size fixed
 	floatString := strconv.FormatFloat(result, 'f', 10, 64)
 	byteValue := make([]byte, len(floatString))
-	fmt.Println("inferCall in test floatString", floatString)
 	copy(byteValue, floatString)
 	return byteValue, nil
 }
