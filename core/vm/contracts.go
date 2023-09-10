@@ -24,6 +24,8 @@ import (
 	"math/big"
 	"strings"
 
+	"strconv"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	inference "github.com/ethereum/go-ethereum/rpc/inference"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -1064,22 +1067,32 @@ var (
 )
 
 func (c *inferCall) Run(input []byte) ([]byte, error) {
-	// Only allow input up to four bytes (function signature)
-	// if len(input) > 4 {
-	//     return nil, errConstInvalidInputLength
-	// }
-	//add timestamp and print
 	fmt.Println("inferCall in test byte", input)
-
 	inputStr := string(input)
+	fmt.Println("inferCall in test string", inputStr)
 	// split string into two parts
 	inputArray := strings.Split(inputStr, "-")
-
-	fmt.Println("inferCall in test string", inputStr)
-	//parse input t
-	output := make([]byte, 6)
-	for i := 0; i < 6; i++ {
-		output[i] = byte(64 + i)
+	modelName := inputArray[0]
+	inputData := inputArray[1]
+	fmt.Println("inferCall in test modelName", modelName)
+	fmt.Println("inferCall in test inputData", inputData)
+	rc := inference.NewRequestClient(5125)
+	tx := inference.InferenceTx{
+		Hash:   "0x123",
+		Model:  modelName,
+		Params: inputData,
 	}
-	return output, nil
+	result, err := rc.Emit(tx)
+	if err != nil {
+		fmt.Println("inferCall in test err", err)
+		return []byte{}, err
+	}
+	fmt.Println("inferCall in test result", result)
+	//to fixed 10 -> byte size 12
+	// need to have a byte size format method to make output size fixed
+	floatString := strconv.FormatFloat(result, 'f', 10, 64)
+	byteValue := make([]byte, len(floatString))
+	fmt.Println("inferCall in test floatString", floatString)
+	copy(byteValue, floatString)
+	return byteValue, nil
 }
