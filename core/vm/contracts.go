@@ -20,7 +20,11 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
+	"strings"
+
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -29,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	inference "github.com/ethereum/go-ethereum/rpc/inference"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -79,15 +84,16 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):    &ecrecover{},
+	common.BytesToAddress([]byte{2}):    &sha256hash{},
+	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):    &dataCopy{},
+	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):    &blake2F{},
+	common.BytesToAddress([]byte{1, 0}): &inferCall{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -1047,4 +1053,40 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+type inferCall struct{}
+
+func (c *inferCall) RequiredGas(input []byte) uint64 {
+	return uint64(1024)
+}
+
+var (
+	errConstInvalidInputLength = errors.New("invalid input length")
+	errNotValidInput           = errors.New("not valid input")
+)
+
+func (c *inferCall) Run(input []byte) ([]byte, error) {
+	inputStr := string(input)
+	// split string into two parts
+	inputArray := strings.Split(inputStr, "-")
+	modelName := inputArray[0]
+	inputData := inputArray[1]
+	rc := inference.NewRequestClient(5125)
+	tx := inference.InferenceTx{
+		Hash:   "0x123",
+		Model:  modelName,
+		Params: inputData,
+	}
+	result, err := rc.Emit(tx)
+	if err != nil {
+		fmt.Println("inferCall in test err", err)
+		return []byte{}, err
+	}
+	//to fixed 10 -> byte size 12
+	// need to have a byte size format method to make output size fixed
+	floatString := strconv.FormatFloat(result, 'f', 10, 64)
+	byteValue := make([]byte, len(floatString))
+	copy(byteValue, floatString)
+	return byteValue, nil
 }

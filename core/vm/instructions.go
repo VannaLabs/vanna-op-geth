@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -24,6 +26,22 @@ import (
 	inference "github.com/ethereum/go-ethereum/rpc/inference"
 	"github.com/holiman/uint256"
 )
+func convertToInteger(floatValue float64) *big.Int {
+	// Define the scaling factor as 10^18
+	scalingFactor := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+
+	// Convert the floating-point number to a big.Float
+	floatVal := new(big.Float).SetFloat64(floatValue)
+
+	// Scale the value by the scaling factor
+	floatVal.Mul(floatVal, new(big.Float).SetInt(scalingFactor))
+
+	// Convert the scaled float to a big.Int
+	intValue := new(big.Int)
+	floatVal.Int(intValue)
+
+	return intValue
+}
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.peek()
@@ -250,6 +268,62 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 
 	size.SetBytes(interpreter.hasherBuf[:])
+	return nil, nil
+}
+
+func opVanna256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	
+	offset, size := scope.Stack.pop(), scope.Stack.peek()
+	data := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	inputData := string(data)
+	rc := inference.NewRequestClient(5125)
+	tx := inference.InferenceTx{
+		Hash:   "0x123",
+		Model:  "Volatility",
+		Params: inputData,
+	}
+	result, err := rc.Emit(tx)
+	if (err != nil) {
+		return []byte{}, err
+	}
+
+	scalingFactor := big.NewInt(100)
+	fixedValue := new(big.Int).Mul(big.NewInt(int64(result*100)), scalingFactor)
+
+	// Convert to bytes32
+	var resultByte [32]byte
+	copy(resultByte[:], fixedValue.Bytes())
+
+	size.SetUint64(convertToInteger(result).Uint64())
+
+
+	return nil, nil
+}
+func opInferCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	offset, size := scope.Stack.pop(), scope.Stack.peek()
+	data := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	inputData := string(data)
+	rc := inference.NewRequestClient(5125)
+	tx := inference.InferenceTx{
+		Hash:   "0x123",
+		Model:  "Volatility",
+		Params: inputData,
+	}
+	result, err := rc.Emit(tx)
+	if (err != nil) {
+		return []byte{}, err
+	}
+
+	scalingFactor := big.NewInt(100)
+	fixedValue := new(big.Int).Mul(big.NewInt(int64(result*100)), scalingFactor)
+
+	// Convert to bytes32
+	var resultByte [32]byte
+	copy(resultByte[:], fixedValue.Bytes())
+
+	size.SetUint64(convertToInteger(result).Uint64())
+
+
 	return nil, nil
 }
 func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -815,20 +889,20 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	return nil, errStopToken
 }
 
-func opInferCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	rc := inference.NewRequestClient(5125)
-	tx := inference.InferenceTx{
-		Hash:   "0x123",
-		Model:  "Volatility",
-		Params: "[[0.03],[0.05],[0.04056685],[0.03235871],[0.05629578]]",
-	}
-	result, err := rc.Emit(tx)
-	if (err != nil) {
-		return []byte{}, err
-	}
-	ret := result
-	return []byte{byte(ret)}, nil
-}
+// func opInferCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+// 	rc := inference.NewRequestClient(5125)
+// 	tx := inference.InferenceTx{
+// 		Hash:   "0x123",
+// 		Model:  "Volatility",
+// 		Params: "[[0.03],[0.05],[0.04056685],[0.03235871],[0.05629578]]",
+// 	}
+// 	result, err := rc.Emit(tx)
+// 	if (err != nil) {
+// 		return []byte{}, err
+// 	}
+// 	ret := result
+// 	return []byte{byte(ret)}, nil
+// }
 
 func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
