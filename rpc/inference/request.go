@@ -2,12 +2,14 @@ package inference
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
+	engine "github.com/ethereum/go-ethereum/engine"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -23,23 +25,50 @@ protoc --go_out=. --go_opt=paths=source_relative \
     inference.proto
 */
 
+type EngineNode struct {
+	PublicKey  string
+	IPAddress  string
+	EthAddress string
+	Stake      float32
+}
+
 type InferenceTx struct {
 	Hash   string
 	Model  string
 	Params string
 }
 
+type PipelineTx struct {
+	Hash     string
+	Seed     string
+	Pipeline string
+	Model    string
+	Params   string
+}
+
 type InferenceConsolidation struct {
 	Tx           InferenceTx
 	Result       string
 	Attestations []string
-	Weight       float64
+	Weight       float32
 }
 
-func (ic InferenceConsolidation) attest(threshold float64, node string, nodeWeight float64) bool {
-	ic.Attestations = append(ic.Attestations, node)
+type InferenceConsensus struct {
+	resultMap map[string]InferenceConsolidation
+	mu        sync.Mutex
+}
+
+func (ic InferenceConsolidation) attest(threshold float32, node EngineNode, result InferenceResult, nodeWeight float32) bool {
+	if !node.validateInference(result) {
+		return ic.Weight >= threshold
+	}
+	ic.Attestations = append(ic.Attestations, node.PublicKey)
 	ic.Weight += nodeWeight
 	return ic.Weight >= threshold
+}
+
+func (engineNode EngineNode) validateInference(result InferenceResult) bool {
+	return true
 }
 
 type RequestClient struct {
@@ -57,75 +86,82 @@ func NewRequestClient(portNum int) *RequestClient {
 
 // Emit inference transaction
 func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
-	resultMap := make(map[string]InferenceConsolidation)
+	timestamp := time.Now().Unix()
+	consensus := InferenceConsensus{resultMap: make(map[string]InferenceConsolidation)}
+	resultChan := make(chan string)
+	timeoutChan := make(chan bool)
 	nodes := getNodes()
-	for _, ip := range nodes {
-		serverAddr := getAddress(ip, rc.port)
-		opts := getDialOptions()
-
-		fmt.Println("Sending request to " + serverAddr)
-		conn, err := grpc.Dial(serverAddr, opts...)
-		if err != nil {
-			log.Println("Unable to dial " + ip)
-			continue
-		}
-		defer conn.Close()
-		client := NewInferenceClient(conn)
-		result := RunInference(client, tx)
-		if _, ok := resultMap[result]; !ok {
-			resultMap[result] = InferenceConsolidation{Tx: tx, Result: result, Attestations: []string{}, Weight: 0}
-		}
-		// Increment results count
-		if val, ok := resultMap[result]; ok {
-			complete := val.attest(float64(len(nodes)), ip, 1)
-			if complete {
-				parsedResult, err := strconv.ParseFloat(val.Result, 64)
-				if err == nil {
-					return parsedResult, nil
-				} else {
-					return 0, err
-				}
-			}
-		}
-		/**
-		TODO: ASYNCHRONOUS APPROACH FOR AFTER WE IMPLEMENT OPTIMISTIC PROCESSING
-		go func(address string, port int) {
-			// Endpoint configurations
-			serverAddr := getAddress(ip, port)
-			opts := getDialOptions()
-
-			fmt.Println("Sending request to " + serverAddr)
-			conn, err := grpc.Dial(serverAddr, opts...)
-			if err != nil {
-				fmt.Println(err)
-			}
-			defer conn.Close()
-			client := NewInferenceClient(conn)
-			result := RunInference(client, tx)
-			// Increment results count
-			if val, ok := resultMap[result]; ok {
-				complete := val.attest(float64(len(nodes)), ip, 1)
-				if complete {
-					parsedResult, err := strconv.ParseFloat(val.result, 64)
-					if (err != nil) {
-						rc.txMap[tx.hash] = parsedResult
-					} else {
-						fmt.Println("Error encountered ")
-					}
-				}
-			} else {
-				resultMap[result] = InferenceConsolidation{tx: tx, result: result, attestations: []string{}}
-			}
-
-		}(ip, rc.port)
-		*/
-		// Hackathon iterative approach
+	var wg sync.WaitGroup
+	for _, node := range nodes {
+		wg.Add(1)
+		go rc.emitToNode(consensus, node, tx, resultChan)
 	}
-	return 0, errors.New("could not reach consensus")
+
+	go func() {
+		timeout := transactionTimeout(tx)
+		for time.Now().Unix()-timestamp < timeout {
+			time.Sleep(1)
+		}
+		timeoutChan <- true
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	select {
+	case result := <-resultChan:
+		r, _ := strconv.ParseFloat(result, 64)
+		triggerEvaluate(consensus)
+		return r, nil
+	case <-timeoutChan:
+		triggerEvaluate(consensus)
+		return 0, errors.New("Could not reach consensus")
+	}
+
+}
+
+func (rc RequestClient) emitToNode(consensus InferenceConsensus, node EngineNode, tx InferenceTx, resultChan chan<- string) {
+	serverAddr := getAddress(node.IPAddress, rc.port)
+	opts := getDialOptions()
+	conn, err := grpc.Dial(serverAddr, opts...)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	client := NewInferenceClient(conn)
+	result := RunInference(client, tx)
+	valid, err := validateSignature(node, result)
+	if err != nil || !valid {
+		return
+	}
+	consensus.mu.Lock()
+	if _, ok := consensus.resultMap[result.Value]; !ok {
+		consensus.resultMap[result.Value] = InferenceConsolidation{Tx: tx, Result: result.Value, Attestations: []string{}, Weight: 0}
+	}
+	// Increment results count
+	if val, ok := consensus.resultMap[result.Value]; ok {
+		complete := val.attest(engine.GetWeightThreshold(), node, result, node.Stake)
+		if complete {
+			resultChan <- val.Result
+		}
+	}
+	consensus.mu.Unlock()
+	return
 }
 
 // Runs inference request via gRPC
-func RunInference(client InferenceClient, tx InferenceTx) string {
+func RunInference(client InferenceClient, tx InferenceTx) InferenceResult {
+	inferenceParams := buildInferenceParameters(tx)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	result, err := client.RunInference(ctx, inferenceParams)
+	if err != nil {
+		log.Fatalf("RPC Failed: %v", err)
+	}
+	return *result
+}
+
+// Runs pipeline  request via gRPC
+func RunPipeline(client InferenceClient, tx InferenceTx) string {
 	inferenceParams := buildInferenceParameters(tx)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -137,15 +173,19 @@ func RunInference(client InferenceClient, tx InferenceTx) string {
 }
 
 // Get IP addresses of inference nodes on network
-func getNodes() []string {
-	// TODO: DNS lookup of public IPV4 addresses of inference nodes
-	// hard code for now
-	nodes := []string{"3.139.238.241"}
+func getNodes() []EngineNode {
+	nodeInfo := engine.NodeLookup()
+	nodes := []EngineNode{}
+	for i := 0; i < len(nodeInfo); i++ {
+		nodes = append(nodes,
+			EngineNode{
+				PublicKey:  nodeInfo[i].PublicKey,
+				IPAddress:  nodeInfo[i].IP,
+				EthAddress: nodeInfo[i].Address,
+				Stake:      nodeInfo[i].Stake,
+			})
+	}
 	return nodes
-}
-
-func getWeightThreshold() float64 {
-	return float64(len(getNodes()))
 }
 
 func getAddress(ip string, port int) string {
@@ -161,4 +201,36 @@ func getDialOptions() []grpc.DialOption {
 
 func buildInferenceParameters(tx InferenceTx) *InferenceParameters {
 	return &InferenceParameters{Tx: tx.Hash, ModelHash: tx.Model, ModelInput: tx.Params}
+}
+
+func validateSignature(engineNode EngineNode, result InferenceResult) (bool, error) {
+	return true, nil
+}
+
+func HexToBytes(hexString string) ([]byte, error) {
+	// Remove any "0x" prefix if present
+	if len(hexString) >= 2 && hexString[:2] == "0x" {
+		hexString = hexString[2:]
+	}
+
+	// Check if the hex string has an odd length (invalid)
+	if len(hexString)%2 != 0 {
+		return nil, errors.New("Hex string has odd length")
+	}
+
+	// Decode the hex string to bytes
+	bytes, err := hex.DecodeString(hexString)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
+
+// Evaluates node behavior
+func triggerEvaluate(ic InferenceConsensus) {
+	return
+}
+
+func transactionTimeout(tx InferenceTx) int64 {
+	return 3
 }
