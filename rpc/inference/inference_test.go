@@ -17,7 +17,7 @@ func TestInference(t *testing.T) {
 	}
 	result, err := rc.Emit(tx)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, result, "0.0013500629")
+	assert.Equal(t, result, 0.0013500629)
 }
 
 // Basic inference test on a spread quoting regression model
