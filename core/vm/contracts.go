@@ -1072,9 +1072,10 @@ func (c *inferCall) Run(input []byte) ([]byte, error) {
 	inputData := inputArray[1]
 	rc := inference.NewRequestClient(5125)
 	tx := inference.InferenceTx{
-		Hash:   "0x123",
+		Hash:   "0x123456789",
 		Model:  modelName,
 		Params: inputData,
+		TxType: "inference",
 	}
 	result, err := rc.Emit(tx)
 	if err != nil {
