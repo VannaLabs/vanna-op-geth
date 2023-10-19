@@ -1,7 +1,6 @@
 package inference
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,10 +13,11 @@ func TestInference(t *testing.T) {
 		Hash:   "0x123456789",
 		Model:  "QmXQpupTphRTeXJMEz3BCt9YUF6kikcqExxPdcVoL1BBhy",
 		Params: "[[0.002, 0.005, 0.004056685]]",
+		TxType: "inference",
 	}
 	result, err := rc.Emit(tx)
 	assert.Equal(t, nil, err)
-	fmt.Println(result)
+	assert.Equal(t, result, "0.0013500629")
 }
 
 // Validate ECDSA Hex Signature

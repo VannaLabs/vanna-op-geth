@@ -33,17 +33,12 @@ type EngineNode struct {
 }
 
 type InferenceTx struct {
-	Hash   string
-	Model  string
-	Params string
-}
-
-type PipelineTx struct {
 	Hash     string
 	Seed     string
 	Pipeline string
 	Model    string
 	Params   string
+	TxType   string
 }
 
 type InferenceConsolidation struct {
@@ -85,7 +80,7 @@ func NewRequestClient(portNum int) *RequestClient {
 }
 
 // Emit inference transaction
-func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
+func (rc RequestClient) Emit(tx InferenceTx) (string, error) {
 	timestamp := time.Now().Unix()
 	consensus := InferenceConsensus{resultMap: make(map[string]InferenceConsolidation)}
 	resultChan := make(chan string)
@@ -109,12 +104,11 @@ func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
 
 	select {
 	case result := <-resultChan:
-		r, _ := strconv.ParseFloat(result, 64)
 		triggerEvaluate(consensus)
-		return r, nil
+		return result, nil
 	case <-timeoutChan:
 		triggerEvaluate(consensus)
-		return 0, errors.New("Could not reach consensus")
+		return "", errors.New("Could not reach consensus")
 	}
 
 }
@@ -128,7 +122,12 @@ func (rc RequestClient) emitToNode(consensus InferenceConsensus, node EngineNode
 	}
 	defer conn.Close()
 	client := NewInferenceClient(conn)
-	result := RunInference(client, tx)
+	var result InferenceResult
+	if tx.TxType == "inference" {
+		result = RunInference(client, tx)
+	} else if tx.TxType == "pipeline" {
+		result = RunPipeline(client, tx)
+	}
 	valid, err := validateSignature(node, result)
 	if err != nil || !valid {
 		return
@@ -161,15 +160,15 @@ func RunInference(client InferenceClient, tx InferenceTx) InferenceResult {
 }
 
 // Runs pipeline  request via gRPC
-func RunPipeline(client InferenceClient, tx InferenceTx) string {
-	inferenceParams := buildInferenceParameters(tx)
+func RunPipeline(client InferenceClient, tx InferenceTx) InferenceResult {
+	pipelineParams := buildPipelineParameters(tx)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	result, err := client.RunInference(ctx, inferenceParams)
+	result, err := client.RunPipeline(ctx, pipelineParams)
 	if err != nil {
 		log.Fatalf("RPC Failed: %v", err)
 	}
-	return result.Value
+	return *result
 }
 
 // Get IP addresses of inference nodes on network
@@ -201,6 +200,16 @@ func getDialOptions() []grpc.DialOption {
 
 func buildInferenceParameters(tx InferenceTx) *InferenceParameters {
 	return &InferenceParameters{Tx: tx.Hash, ModelHash: tx.Model, ModelInput: tx.Params}
+}
+
+func buildPipelineParameters(tx InferenceTx) *PipelineParameters {
+	return &PipelineParameters{
+		Tx:           tx.Hash,
+		Seed:         tx.Seed,
+		PipelineName: tx.Pipeline,
+		ModelHash:    tx.Model,
+		ModelInput:   tx.Params,
+	}
 }
 
 func validateSignature(engineNode EngineNode, result InferenceResult) (bool, error) {

@@ -24,8 +24,6 @@ import (
 	"math/big"
 	"strings"
 
-	"strconv"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1080,13 +1078,14 @@ func (c *inferCall) Run(input []byte) ([]byte, error) {
 	}
 	result, err := rc.Emit(tx)
 	if err != nil {
-		fmt.Println("inferCall in test err", err)
+		fmt.Println("InferCall Error", err)
 		return []byte{}, err
 	}
 	//to fixed 10 -> byte size 12
 	// need to have a byte size format method to make output size fixed
-	floatString := strconv.FormatFloat(result, 'f', 10, 64)
-	byteValue := make([]byte, len(floatString))
-	copy(byteValue, floatString)
+
+	//floatString := strconv.FormatFloat(result, 'f', 10, 64)
+	byteValue := make([]byte, len(result))
+	copy(byteValue, result)
 	return byteValue, nil
 }
