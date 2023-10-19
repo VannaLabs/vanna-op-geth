@@ -20,6 +20,19 @@ func TestInference(t *testing.T) {
 	assert.Equal(t, result, "0.0013500629")
 }
 
+// Basic inference test on a spread quoting regression model
+func TestInference2(t *testing.T) {
+	rc := NewRequestClient(5125)
+	tx := InferenceTx{
+		Hash:   "0x123",
+		Model:  "QmXQpupTphRTeXJMEz3BCt9YUF6kikcqExxPdcVoL1BBhy",
+		Params: "[[0.002, 0.005, 0.004056685]]",
+	}
+	result, err := rc.Emit(tx)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, result, "")
+}
+
 // Validate ECDSA Hex Signature
 func TestSignatureValidation(t *testing.T) {
 	engineNode := EngineNode{
