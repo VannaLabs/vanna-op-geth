@@ -30,7 +30,7 @@ func TestInference2(t *testing.T) {
 	}
 	result, err := rc.Emit(tx)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, result, "")
+	assert.Equal(t, result, float64(0))
 }
 
 // Validate ECDSA Hex Signature

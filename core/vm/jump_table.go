@@ -386,14 +386,6 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(2, 1),
 			memorySize:  memoryKeccak256,
 		},
-		INFERCALL: {
-			execute:     opInferCall,
-			constantGas: params.Keccak256Gas,
-			dynamicGas:  gasInferCall,
-			minStack:    minStack(2, 1),
-			maxStack:    maxStack(2, 1),
-			memorySize:  memoryInferCall,
-		},
 		ADDRESS: {
 			execute:     opAddress,
 			constantGas: GasQuickStep,
