@@ -1066,7 +1066,7 @@ var (
 
 func (c *inferCall) Run(input []byte) ([]byte, error) {
 	inputStr := string(input)
-	// split string into two parts
+	// Split string into two parts
 	inputArray := strings.Split(inputStr, "-")
 	modelName := inputArray[0]
 	inputData := inputArray[1]
@@ -1082,8 +1082,6 @@ func (c *inferCall) Run(input []byte) ([]byte, error) {
 		fmt.Println("InferCall Error", err)
 		return []byte{}, err
 	}
-	//to fixed 10 -> byte size 12
-	// need to have a byte size format method to make output size fixed
 
 	byteValue := make([]byte, len(result))
 	copy(byteValue, result)
