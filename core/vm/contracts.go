@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -1086,8 +1085,7 @@ func (c *inferCall) Run(input []byte) ([]byte, error) {
 	//to fixed 10 -> byte size 12
 	// need to have a byte size format method to make output size fixed
 
-	floatString := strconv.FormatFloat(result, 'f', 10, 64)
-	byteValue := make([]byte, len(floatString))
-	copy(byteValue, floatString)
+	byteValue := make([]byte, len(result))
+	copy(byteValue, result)
 	return byteValue, nil
 }

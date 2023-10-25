@@ -79,7 +79,7 @@ func NewRequestClient(portNum int) *RequestClient {
 }
 
 // Emit inference transaction
-func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
+func (rc RequestClient) Emit(tx InferenceTx) (string, error) {
 	consensus := InferenceConsensus{resultMap: make(map[string]InferenceConsolidation)}
 	resultChan := make(chan string)
 	errorChan := make(chan bool)
@@ -104,11 +104,10 @@ func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
 	select {
 	case output := <-resultChan:
 		triggerEvaluate(consensus)
-		result, _ := strconv.ParseFloat(output, 64)
-		return result, nil
+		return output, nil
 	case <-errorChan:
 		triggerEvaluate(consensus)
-		return 0, errors.New("Could not reach consensus")
+		return "INFERENCE ERROR", errors.New("Could not reach consensus")
 	}
 
 }
