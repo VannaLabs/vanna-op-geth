@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -81,23 +80,23 @@ func NewRequestClient(portNum int) *RequestClient {
 
 // Emit inference transaction
 func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
-	timestamp := time.Now().Unix()
 	consensus := InferenceConsensus{resultMap: make(map[string]InferenceConsolidation)}
 	resultChan := make(chan string)
-	timeoutChan := make(chan bool)
+	errorChan := make(chan bool)
 	nodes := getNodes()
 	var wg sync.WaitGroup
 	for _, node := range nodes {
 		wg.Add(1)
-		go rc.emitToNode(consensus, node, tx, resultChan)
+		go rc.emitToNode(consensus, node, tx, resultChan, errorChan)
 	}
 
+	timestamp := time.Now().Unix()
 	go func() {
 		timeout := transactionTimeout(tx)
 		for time.Now().Unix()-timestamp < timeout {
-			time.Sleep(1)
+			time.Sleep(3 * time.Second)
 		}
-		timeoutChan <- true
+		errorChan <- true
 		wg.Wait()
 		close(resultChan)
 	}()
@@ -107,14 +106,14 @@ func (rc RequestClient) Emit(tx InferenceTx) (float64, error) {
 		triggerEvaluate(consensus)
 		result, _ := strconv.ParseFloat(output, 64)
 		return result, nil
-	case <-timeoutChan:
+	case <-errorChan:
 		triggerEvaluate(consensus)
 		return 0, errors.New("Could not reach consensus")
 	}
 
 }
 
-func (rc RequestClient) emitToNode(consensus InferenceConsensus, node EngineNode, tx InferenceTx, resultChan chan<- string) {
+func (rc RequestClient) emitToNode(consensus InferenceConsensus, node EngineNode, tx InferenceTx, resultChan chan<- string, errorChan chan<- bool) {
 	serverAddr := getAddress(node.IPAddress, rc.port)
 	opts := getDialOptions()
 	conn, err := grpc.Dial(serverAddr, opts...)
@@ -131,6 +130,8 @@ func (rc RequestClient) emitToNode(consensus InferenceConsensus, node EngineNode
 		result, inferErr = RunPipeline(client, tx)
 	}
 	if inferErr != nil {
+		errorChan <- true
+		//log.Fatalf("RPC Inference Failed: %v", err)
 		return
 	}
 	valid, err := validateSignature(node, result)
@@ -159,7 +160,6 @@ func RunInference(client InferenceClient, tx InferenceTx) (InferenceResult, erro
 	defer cancel()
 	result, err := client.RunInference(ctx, inferenceParams)
 	if err != nil {
-		log.Fatalf("RPC Failed: %v", err)
 		return InferenceResult{}, errors.New("Inference Execution Failed")
 	}
 	return *result, nil
@@ -172,7 +172,6 @@ func RunPipeline(client InferenceClient, tx InferenceTx) (InferenceResult, error
 	defer cancel()
 	result, err := client.RunPipeline(ctx, pipelineParams)
 	if err != nil {
-		log.Fatalf("RPC Failed: %v", err)
 		return InferenceResult{}, errors.New("Inference Execution Failed")
 	}
 	return *result, nil
